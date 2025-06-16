@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from Trail1 import solve_cable_shape
+from Dynamic_zero_nonlinear import solve_cable_shape
+from scipy.interpolate import CubicSpline
 
 L = 100           # Total length of the cable (m)
 M = 200           # Mass of the towed object (kg)   \
@@ -31,15 +32,21 @@ F_B = np.ones(N+1)*(m*L/w)
 F_B[-1] = rho*g*0.0657
 
 #Initialize arrays
-t = 2  # Total simulation time in seconds
+t = 1  # Total simulation time in seconds
 theta = np.full(N + 1, np.pi/2)
 dt = 0.01
 time = 0
 tolerance = 1e-5
 max_iters = 100 
 theta_prev = theta.copy()
-theta_pprev = theta.copy()
+theta_dot_prev = np.zeros(N + 1)  # Initialize theta_dot_prev to zero
 T = np.zeros(N + 1)
+theta_dot = np.zeros(N + 1)
+theta_ddot = np.zeros(N + 1)
+Omega=[0]
+alpha=[0]
+VEL = [0]
+theta_history = []
 
 while time < t:  # Simulate for 10 seconds
     # theta_assumed = solve_cable_shape(Vx_func(time),Vy, Ax_func(time), Ay, theta_init=None, tolerance=1e-5, max_iters=100)  # Assume vertical cable at start
@@ -49,15 +56,33 @@ while time < t:  # Simulate for 10 seconds
     while iterations < max_iters:
         Vx = Vx_func(time)
         Ax = Ax_func(time)
+        
+        if len(theta_history) >= 5:
+            times = np.linspace(time - dt*(len(theta_history)-1), time, len(theta_history))
+            theta_array = np.array(theta_history).T  # shape: (N+1, time_steps)
+
+
+            for i in range(N+1):
+                cs = CubicSpline(times, theta_array[i])
+                theta_dot[i] = cs.derivative(1)(time)
+                theta_ddot[i] = cs.derivative(2)(time)
+        else:
+            theta_dot = (theta - theta_prev) / dt
+            print(theta_dot)
+            theta_ddot = (theta_dot - theta_dot_prev) / dt
+        Vx = Vx_func(time)
+        Ax = Ax_func(time)
         vx = np.zeros(N + 1)
         vy = np.zeros(N + 1)
         ax = np.zeros(N + 1)
         ay = np.zeros(N + 1)
         for i in range(1, N + 1):
-            vx[i] = Vx + (l*(np.sum(np.cos(theta_prev[:i+1])) - np.sum(np.cos(theta_assumed[:i+1]))))/dt
-            vy[i] = (np.sum(np.sin(theta_assumed[:i+1])) - np.sum(np.sin(theta_prev[:i+1])))*l/dt
-            ax[i] = Ax + (2*np.sum(np.cos(theta_prev[:i+1])) - np.sum(np.cos(theta_assumed[:i+1]))- np.sum(np.cos(theta_pprev[:i+1])))*l/(dt**2)
-            ay[i] = (np.sum(np.sin(theta_pprev[:i+1])) - 2*np.sum(np.sin(theta_prev[:i+1])) + np.sum(np.sin(theta_assumed[:i+1])))*l/(dt**2)
+            vx[i] = Vx + l * np.sum(np.sin(theta[1:i + 1]) * theta_dot[1:i + 1])
+            vy[i] = Vy + l * np.sum(np.cos(theta[1:i + 1]) * theta_dot[1:i + 1])
+            ax[i] = Ax + l * np.sum(np.cos(theta[1:i + 1]) * theta_dot[1:i + 1] ** 2) + \
+                    l * np.sum(np.sin(theta[1:i + 1]) * theta_ddot[1:i + 1])
+            ay[i] = Ay - l * np.sum(np.sin(theta[1:i + 1]) * theta_dot[1:i + 1] ** 2) + \
+                    l * np.sum(np.cos(theta[1:i + 1]) * theta_ddot[1:i + 1])
 
         #Solve for Nth node
         k[-1] = 0.5*rho*0.0324*0.004 * abs(np.sqrt(vx[-1]**2 + vy[-1]**2))
@@ -90,9 +115,12 @@ while time < t:  # Simulate for 10 seconds
         relaxation_factor = 0.5  # Start with 0.5, adjust as needed
         theta_assumed = relaxation_factor * theta + (1 - relaxation_factor) * theta_assumed
 
-        print(theta_assumed)
         iterations += 1
-    theta_pprev = theta_prev.copy()
+    theta_history.append(theta.copy())
+    VEL.append(time)
+    Omega.append(theta_dot[-1])
+    alpha.append(theta_ddot[-1])
+    theta_dot_prev = theta_dot.copy()
     theta_prev = theta.copy()
     time += dt
     
