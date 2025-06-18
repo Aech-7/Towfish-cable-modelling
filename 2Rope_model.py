@@ -82,8 +82,8 @@ def solve_cable_shape(Vx, Vy, Ax, Ay, theta_init=None, tolerance=1e-5, max_iters
                     l * np.sum(np.sin(theta[1:i + 1]) * theta_ddot[1:i + 1])
             ay[i] = Ay - l * np.sum(np.sin(theta[1:i + 1]) * theta_dot[1:i + 1] ** 2) + \
                     l * np.sum(np.cos(theta[1:i + 1]) * theta_ddot[1:i + 1])
-
-        k_arr[-1] = 0.5 * rho * 0.768 * 2.13 * np.sqrt(vx[-1]**2 + vy[-1]**2)  # Remove abs(), add velocity
+        Cd_N = 0.1
+        k_arr[-1] = 0.5 * rho * 0.768 * 2.13 * np.sqrt(vx[-1]**2 + vy[-1]**2)*Cd_N # Remove abs(), add velocity
 
         A_N = M*g - M*ay[-1] - k_arr[-1]*vy[-1] - F_B[-1]
         B_N = M*ax[-1] + k_arr[-1]*vx[-1]
@@ -92,7 +92,7 @@ def solve_cable_shape(Vx, Vy, Ax, Ay, theta_init=None, tolerance=1e-5, max_iters
         T[-1] = T_N
 
         for i in range(N - 1, -1, -1):
-            Cd[i] = 2 if i < 22 else 0  # Set drag coefficient based on segment
+            Cd[i] = 2 if i < 22 else 0.05  # Set drag coefficient based on segment
             v_i = np.sqrt(vx[i] ** 2 + vy[i] ** 2)
             A_proj = l * d[i] * abs(np.sin(theta[i + 1]))
             # A_proj = l * d[i] * max(abs(np.sin(theta[i + 1])), 1e-6)
